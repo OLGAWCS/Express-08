@@ -1,7 +1,7 @@
 const database = require("./database");
 
 const getUser = (req, res) => {
-  let sql = "select * from users";
+  let sql = "select firstname, lastname, email, city, language from users";
   const sqlValues = [];
   if (req.query.language != null) {
     sql += " where language = ?";
@@ -26,11 +26,32 @@ const getUser = (req, res) => {
     });
 };
 
+const getUserByEmailWithPasswordAndPassToNext = (req, res, next) => {
+  const { email } = req.body;
+  database
+    .query("select * from users where email = ?", [email])
+    .then(([users]) => {
+      if (users[0] != null) {
+        req.user = users[0];
+        next();
+      } else {
+        res.status(401);
+      }
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).send("Error retrieving data from database");
+    });
+};
+
 const getUserById = (req, res) => {
   const id = parseInt(req.params.id);
 
   database
-    .query("select * from users where id = ?", [id])
+    .query(
+      "select firstname, lastname, email, city, language from users where id = ?",
+      [id]
+    )
     .then(([users]) => {
       if (users[0] != null) {
         res.status(200).json(users[0]);
@@ -44,11 +65,12 @@ const getUserById = (req, res) => {
     });
 };
 const postUser = (req, res) => {
-  const { firstname, lastname, email, city, language } = req.body;
+  const { firstname, lastname, email, city, language, hashedPassword } =
+    req.body;
   database
     .query(
-      "INSERT INTO users (firstname, lastname, email, city, language) VALUES (?, ?, ?, ?, ?)",
-      [firstname, lastname, email, city, language]
+      "INSERT INTO users (firstname, lastname, email, city, language, hashedPassword) VALUES (?, ?, ?, ?, ?, ?)",
+      [firstname, lastname, email, city, language, hashedPassword]
     )
     .then(([result]) => {
       res.location(`/api/users/${result.insertId}`).sendStatus(201);
@@ -64,6 +86,10 @@ const postUser = (req, res) => {
 };
 const updateUser = (req, res) => {
   const id = parseInt(req.params.id);
+  if (req.payload.sub !== id) {
+    res.sendStatus(403);
+    return;
+  }
   const { firstname, lastname, email, city, language } = req.body;
   database
     .query(
@@ -84,6 +110,10 @@ const updateUser = (req, res) => {
 };
 const deleteUser = (req, res) => {
   const id = parseInt(req.params.id);
+  if (req.payload.sub !== id) {
+    res.sendStatus(403);
+    return;
+  }
   database
     .query("delete from users where id = ?", [id])
     .then(([result]) => {
@@ -104,4 +134,5 @@ module.exports = {
   postUser,
   updateUser,
   deleteUser,
+  getUserByEmailWithPasswordAndPassToNext,
 };
